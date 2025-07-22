@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Indonesian RAG Chatbot</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h2>Chatbot RAG Bahasa Indonesia</h2>
+        <form id="upload-form" enctype="multipart/form-data">
+            <!-- UPDATED: Added 'multiple' and changed name to 'files' -->
+            <input type="file" name="files" accept=".pdf" required multiple>
+            <button type="submit">Unggah PDF</button>
+        </form>
+        <div id="upload-status"></div>
+        <hr>
+        <div id="chatbox"></div>
+        <div id="input-area">
+            <input type="text" id="user-input" placeholder="Tulis pertanyaan dalam Bahasa Indonesia..." autocomplete="off">
+            <button id="send-btn">Kirim</button>
+        </div>
+    </div>
+
+    <script>
+        const uploadForm = document.getElementById('upload-form');
+        const uploadStatus = document.getElementById('upload-status');
+        const chatbox = document.getElementById('chatbox');
+        const userInput = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+
+        const addMessage = (sender, message) => {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'chat-message';
+            // Sanitize message to prevent HTML injection
+            const sanitizedMessage = message.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            messageDiv.innerHTML = `<b>${sender}:</b> ${sanitizedMessage}`;
+            chatbox.appendChild(messageDiv);
+            chatbox.scrollTop = chatbox.scrollHeight;
+        };
+
+        uploadForm.onsubmit = async (e) => {
+            e.preventDefault();
+            const formData = new FormData(uploadForm);
+            uploadStatus.textContent = "Mengunggah dan memproses PDF...";
+            uploadStatus.style.color = '#7f8c8d';
+
+            try {
+                const res = await fetch('/upload', { method: 'POST', body: formData });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    uploadStatus.textContent = data.message;
+                    uploadStatus.style.color = '#27ae60';
+                } else {
+                    uploadStatus.textContent = `Error: ${data.error}`;
+                    uploadStatus.style.color = '#e74c3c';
+                }
+            } catch (error) {
+                uploadStatus.textContent = 'Network error during upload.';
+                uploadStatus.style.color = '#e74c3c';
+            }
+        };
+
+        const sendMessage = async () => {
+            const message = userInput.value.trim();
+            if (!message) return;
+
+            addMessage('Anda', message);
+            userInput.value = '';
+
+            try {
+                const res = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({message})
+                });
+                const data = await res.json();
+                const botResponse = data.response || `Error: ${data.error}`;
+                addMessage('Bot', botResponse);
+            } catch (error) {
+                addMessage('Bot', 'Network error during chat.');
+            }
+        };
+
+        sendBtn.onclick = sendMessage;
+        userInput.addEventListener('keyup', (event) => {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>
