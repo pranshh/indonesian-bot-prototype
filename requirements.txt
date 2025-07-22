@@ -11,3 +11,4 @@ pyyaml
 pandas
 PyPDF2
 google-generativeai
+google-cloud-texttospeech

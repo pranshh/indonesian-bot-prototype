@@ -9,7 +9,6 @@
     <div class="container">
         <h2>Chatbot RAG Bahasa Indonesia</h2>
         <form id="upload-form" enctype="multipart/form-data">
-            <!-- UPDATED: Added 'multiple' and changed name to 'files' -->
             <input type="file" name="files" accept=".pdf" required multiple>
             <button type="submit">Unggah PDF</button>
         </form>
@@ -17,8 +16,9 @@
         <hr>
         <div id="chatbox"></div>
         <div id="input-area">
-            <input type="text" id="user-input" placeholder="Tulis pertanyaan dalam Bahasa Indonesia..." autocomplete="off">
+            <input type="text" id="user-input" placeholder="Tulis atau ucapkan pertanyaan..." autocomplete="off">
             <button id="send-btn">Kirim</button>
+            <button id="mic-btn">🎤</button>
         </div>
     </div>
 
@@ -28,15 +28,24 @@
         const chatbox = document.getElementById('chatbox');
         const userInput = document.getElementById('user-input');
         const sendBtn = document.getElementById('send-btn');
+        const micBtn = document.getElementById('mic-btn');
 
         const addMessage = (sender, message) => {
             const messageDiv = document.createElement('div');
             messageDiv.className = 'chat-message';
-            // Sanitize message to prevent HTML injection
             const sanitizedMessage = message.replace(/</g, "&lt;").replace(/>/g, "&gt;");
             messageDiv.innerHTML = `<b>${sender}:</b> ${sanitizedMessage}`;
             chatbox.appendChild(messageDiv);
             chatbox.scrollTop = chatbox.scrollHeight;
+        };
+        
+        // --- Function to play audio from Base64 ---
+        const playAudio = (base64Audio) => {
+            const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
+            audio.play().catch(e => {
+                console.error("Audio playback failed:", e);
+                addMessage('System', 'Gagal memutar audio balasan.');
+            });
         };
 
         uploadForm.onsubmit = async (e) => {
@@ -70,15 +79,33 @@
             userInput.value = '';
 
             try {
+                addMessage('Bot', '...'); // Show a thinking indicator
                 const res = await fetch('/chat', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({message})
                 });
+                
+                chatbox.removeChild(chatbox.lastChild); // Remove the thinking indicator
                 const data = await res.json();
-                const botResponse = data.response || `Error: ${data.error}`;
+                
+                if (data.error) {
+                    addMessage('Bot', `Error: ${data.error}`);
+                    return;
+                }
+
+                const botResponse = data.response;
                 addMessage('Bot', botResponse);
+                
+                // Play audio if it exists in the response
+                if (data.audio) {
+                    playAudio(data.audio);
+                }
+
             } catch (error) {
+                if (chatbox.lastChild && chatbox.lastChild.textContent.includes('...')) {
+                    chatbox.removeChild(chatbox.lastChild);
+                }
                 addMessage('Bot', 'Network error during chat.');
             }
         };
@@ -89,6 +116,53 @@
                 sendMessage();
             }
         });
+        
+        // --- Web Speech API Logic for Microphone ---
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition;
+
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.lang = 'id-ID'; // Set language to Indonesian
+            recognition.interimResults = false;
+            recognition.maxAlternatives = 1;
+
+            micBtn.onclick = () => {
+                if (micBtn.classList.contains('recording')) {
+                    recognition.stop();
+                } else {
+                    recognition.start();
+                }
+            };
+
+            recognition.onstart = () => {
+                micBtn.classList.add('recording');
+                micBtn.textContent = '🔴';
+                userInput.placeholder = "Mendengarkan...";
+            };
+
+            recognition.onend = () => {
+                micBtn.classList.remove('recording');
+                micBtn.textContent = '🎤';
+                userInput.placeholder = "Tulis atau ucapkan pertanyaan...";
+            };
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                userInput.value = transcript;
+                // Automatically send the message after transcription
+                setTimeout(sendMessage, 100); 
+            };
+            
+            recognition.onerror = (event) => {
+                console.error("Speech recognition error:", event.error);
+                addMessage('System', `Error pengenalan suara: ${event.error}`);
+            };
+
+        } else {
+            micBtn.style.display = 'none'; // Hide mic button if not supported
+            console.log("Speech Recognition not supported in this browser.");
+        }
     </script>
 </body>
 </html>

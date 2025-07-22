@@ -3,11 +3,13 @@ from flask_cors import CORS
 import os
 import yaml
 import google.generativeai as genai
+from google.cloud import texttospeech
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.docstore.document import Document
 from PyPDF2 import PdfReader
+import base64
 
 # --- Basic Setup ---
 app = Flask(__name__)
@@ -45,6 +47,14 @@ except (ValueError, AttributeError, KeyError) as e:
 except Exception as e:
     print(f"Failed to initialize Gemini client: {e}")
     groq_client = None
+
+try:
+    # This will automatically find your credentials if the environment variable is set
+    tts_client = texttospeech.TextToSpeechClient()
+    print("✅ Google Cloud TTS client initialized successfully.")
+except Exception as e:
+    print(f"❌ Could not initialize Google Cloud TTS client. Make sure GOOGLE_APPLICATION_CREDENTIALS is set. Error: {e}")
+    tts_client = None
 
 
 # Embedding model for document retrieval
@@ -128,7 +138,9 @@ def chat():
     if not gemini_model:
         return jsonify({"error": "Gemini client is not available. Check server logs for API key issues."}), 500
     # --- MODIFICATION END ---
-        
+    if not tts_client:
+        return jsonify({"error": "Text-to-Speech client is not available."}), 500
+    
     user_input = request.json.get("message", "").strip()
     if not user_input:
         return jsonify({"error": "Message cannot be empty."}), 400
@@ -153,11 +165,24 @@ def chat():
     try:
         # Generate content using the Gemini model
         response = gemini_model.generate_content(prompt)
+        text_response = response.text.strip()
         
+        synthesis_input = texttospeech.SynthesisInput(text=text_response)
+        voice = texttospeech.VoiceSelectionParams(
+            language_code="id-ID", name="id-ID-Standard-A"
+        )
+        audio_config = texttospeech.AudioConfig(
+            audio_encoding=texttospeech.AudioEncoding.MP3
+        )
+        tts_response = tts_client.synthesize_speech(
+            input=synthesis_input, voice=voice, audio_config=audio_config
+        )
+
+        audio_base64 = base64.b64encode(tts_response.audio_content).decode("utf-8")
         # Extract the text from the response
         response_content = response.text
-        return jsonify({"response": response_content.strip()})
-        
+        return jsonify({"response": response_content.strip(), "audio": audio_base64})
+
     except Exception as e:
         print(f"Gemini API Error: {e}")
         return jsonify({"error": f"An error occurred with the Gemini API: {e}"}), 500
