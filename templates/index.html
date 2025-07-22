@@ -1,3 +1,4 @@
+<!-- index.html -->
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -30,16 +31,34 @@
         const sendBtn = document.getElementById('send-btn');
         const micBtn = document.getElementById('mic-btn');
 
-        const addMessage = (sender, message) => {
+        // --- MODIFICATION: addMessage now accepts optional audio data ---
+        const addMessage = (sender, message, audioData = null) => {
             const messageDiv = document.createElement('div');
             messageDiv.className = 'chat-message';
+            
+            // Sanitize message to prevent HTML injection
             const sanitizedMessage = message.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-            messageDiv.innerHTML = `<b>${sender}:</b> ${sanitizedMessage}`;
+            
+            // Create a span for the message content
+            const messageContent = document.createElement('span');
+            messageContent.className = 'message-content';
+            messageContent.innerHTML = `<b>${sender}:</b> ${sanitizedMessage}`;
+            messageDiv.appendChild(messageContent);
+
+            // If the sender is the Bot and audio data exists, add a replay button
+            if (sender === 'Bot' && audioData) {
+                const replayBtn = document.createElement('button');
+                replayBtn.className = 'replay-btn';
+                replayBtn.innerHTML = '▶️'; // Play icon
+                // Store the base64 audio data directly on the button
+                replayBtn.dataset.audio = audioData;
+                messageDiv.appendChild(replayBtn);
+            }
+
             chatbox.appendChild(messageDiv);
             chatbox.scrollTop = chatbox.scrollHeight;
         };
         
-        // --- Function to play audio from Base64 ---
         const playAudio = (base64Audio) => {
             const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
             audio.play().catch(e => {
@@ -86,7 +105,7 @@
                     body: JSON.stringify({message})
                 });
                 
-                chatbox.removeChild(chatbox.lastChild); // Remove the thinking indicator
+                chatbox.removeChild(chatbox.lastChild);
                 const data = await res.json();
                 
                 if (data.error) {
@@ -95,9 +114,10 @@
                 }
 
                 const botResponse = data.response;
-                addMessage('Bot', botResponse);
+                // --- MODIFICATION: Pass the audio data when adding the bot's message ---
+                addMessage('Bot', botResponse, data.audio);
                 
-                // Play audio if it exists in the response
+                // Play audio automatically the first time
                 if (data.audio) {
                     playAudio(data.audio);
                 }
@@ -117,13 +137,24 @@
             }
         });
         
-        // --- Web Speech API Logic for Microphone ---
+        // --- MODIFICATION: Add event listener to the chatbox for replay buttons ---
+        chatbox.addEventListener('click', (event) => {
+            // Check if a replay button was clicked
+            if (event.target && event.target.classList.contains('replay-btn')) {
+                const audioData = event.target.dataset.audio;
+                if (audioData) {
+                    playAudio(audioData);
+                }
+            }
+        });
+
+        // --- Web Speech API Logic for Microphone (No changes here) ---
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         let recognition;
 
         if (SpeechRecognition) {
             recognition = new SpeechRecognition();
-            recognition.lang = 'id-ID'; // Set language to Indonesian
+            recognition.lang = 'id-ID';
             recognition.interimResults = false;
             recognition.maxAlternatives = 1;
 
@@ -150,7 +181,6 @@
             recognition.onresult = (event) => {
                 const transcript = event.results[0][0].transcript;
                 userInput.value = transcript;
-                // Automatically send the message after transcription
                 setTimeout(sendMessage, 100); 
             };
             
@@ -160,7 +190,7 @@
             };
 
         } else {
-            micBtn.style.display = 'none'; // Hide mic button if not supported
+            micBtn.style.display = 'none';
             console.log("Speech Recognition not supported in this browser.");
         }
     </script>
