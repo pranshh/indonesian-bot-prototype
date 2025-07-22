@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 import os
 import yaml
-from groq import Groq
+import google.generativeai as genai
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain.text_splitter import CharacterTextSplitter
@@ -28,13 +28,13 @@ try:
         keys = yaml.safe_load(file)
     
     # Safely get the API key with better error handling
-    groq_api_key = keys.get("groq", {}).get("api_key")
-    if not groq_api_key:
-        raise ValueError("API key for 'groq' not found in keys.yaml")
+    gemini_api_key = keys.get("gemini", {}).get("api_key")
+    if not gemini_api_key:
+        raise ValueError("API key for 'gemini' not found in keys.yaml")
 
-    groq_client = Groq(api_key=groq_api_key)
-    GROQ_MODEL = "llama3-8b-8192"
-    print("Groq client initialized successfully.")
+    genai.configure(api_key=gemini_api_key)
+    gemini_model = genai.GenerativeModel("gemini-2.5-flash") # Or "gemini-pro"
+    print("Gemini client initialized successfully.")
 
 except FileNotFoundError:
     print(f"ERROR: keys.yaml file not found at {KEYS_YAML_PATH}")
@@ -43,7 +43,7 @@ except (ValueError, AttributeError, KeyError) as e:
     print(f"ERROR: Could not read API key from keys.yaml. Please check its structure. Details: {e}")
     groq_client = None
 except Exception as e:
-    print(f"Failed to initialize Groq client: {e}")
+    print(f"Failed to initialize Gemini client: {e}")
     groq_client = None
 
 
@@ -121,11 +121,13 @@ def upload():
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    """Handles chat requests using the Groq API."""
+    """Handles chat requests using the Gemini SDK."""
     if not vector_db:
         return jsonify({"error": "Please upload one or more PDF documents first."}), 400
-    if not groq_client:
-        return jsonify({"error": "Groq client is not available. Check server logs for API key issues."}), 500
+    # --- MODIFICATION START ---
+    if not gemini_model:
+        return jsonify({"error": "Gemini client is not available. Check server logs for API key issues."}), 500
+    # --- MODIFICATION END ---
         
     user_input = request.json.get("message", "").strip()
     if not user_input:
@@ -133,39 +135,33 @@ def chat():
 
     context = retrieve_context(user_input, vector_db)
     
-    messages = [
-        {
-            "role": "system",
-            "content": (
-                "You are an expert Indonesian assistant. Your primary role is to answer questions based *strictly* on the context provided by the user. "
-                "Follow these rules precisely:\n"
-                "1. Your entire response must be in Bahasa Indonesia.\n"
-                "2. Base your answer solely on the information within the 'Context' section. Do not use any external knowledge.\n"
-                "3. If the answer is not found in the context, you must state 'Maaf, informasi tersebut tidak ditemukan dalam dokumen yang diberikan.' and nothing else.\n"
-                "4. Keep your answers concise and directly address the user's question."
-                "5. Do not mention 'Menurut dokumen Travel Policy' for every response. Just write your response normally"
-            )
-        },
-        {
-            "role": "user",
-            "content": f"Context:\n---\n{context}\n---\n\nQuestion: {user_input}"
-        }
-    ]
+    # --- MODIFICATION START ---
+    # Construct the prompt for the Gemini model.
+    # The Gemini SDK is simpler; you can combine the system instructions and the user query into a single prompt.
+    prompt = (
+        "You are an expert Indonesian assistant. Your primary role is to answer questions based *strictly* on the context provided by the user. "
+        "Follow these rules precisely:\n"
+        "1. Your entire response must be in Bahasa Indonesia.\n"
+        "2. Base your answer solely on the information within the 'Context' section. Do not use any external knowledge.\n"
+        "3. If the answer is not found in the context, you must state 'Maaf, informasi tersebut tidak ditemukan dalam dokumen yang diberikan.' and nothing else.\n"
+        "4. Keep your answers concise and directly address the user's question.\n"
+        "5. Do not mention 'Menurut dokumen Travel Policy' for every response. Just write your response normally.\n\n"
+        f"Context:\n---\n{context}\n---\n\n"
+        f"Question: {user_input}"
+    )
     
     try:
-        chat_completion = groq_client.chat.completions.create(
-            messages=messages,
-            model=GROQ_MODEL,
-            temperature=0.5,
-            max_tokens=1024,
-        )
-        response_content = chat_completion.choices[0].message.content
+        # Generate content using the Gemini model
+        response = gemini_model.generate_content(prompt)
+        
+        # Extract the text from the response
+        response_content = response.text
         return jsonify({"response": response_content.strip()})
         
     except Exception as e:
-        print(f"Groq API Error: {e}")
-        # This is where the "limit reached" error from Groq will likely appear
-        return jsonify({"error": f"An error occurred with the Groq API: {e}"}), 500
+        print(f"Gemini API Error: {e}")
+        return jsonify({"error": f"An error occurred with the Gemini API: {e}"}), 500
+
 
 # --- Main Execution ---
 if __name__ == "__main__":

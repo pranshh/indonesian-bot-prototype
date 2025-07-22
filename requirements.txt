@@ -1,5 +1,4 @@
 flask
-groq
 langchain_community
 langchain
 faiss-cpu
@@ -11,3 +10,4 @@ requests
 pyyaml
 pandas
 PyPDF2
+google-generativeai
