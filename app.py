@@ -11,25 +11,19 @@ from langchain.docstore.document import Document
 from PyPDF2 import PdfReader
 import base64
 
-# --- Basic Setup ---
 app = Flask(__name__)
 CORS(app)
 
 UPLOAD_FOLDER = 'docs'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# --- Groq API and Embedding Model Configuration ---
-
-# Get the absolute path to the directory where this script is located
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 KEYS_YAML_PATH = os.path.join(BASE_DIR, "keys.yaml")
 
 try:
-    # Load API key from the YAML file using the absolute path
     with open(KEYS_YAML_PATH, "r") as file:
         keys = yaml.safe_load(file)
-    
-    # Safely get the API key with better error handling
+
     gemini_api_key = keys.get("gemini", {}).get("api_key")
     if not gemini_api_key:
         raise ValueError("API key for 'gemini' not found in keys.yaml")
@@ -49,21 +43,16 @@ except Exception as e:
     groq_client = None
 
 try:
-    # This will automatically find your credentials if the environment variable is set
     tts_client = texttospeech.TextToSpeechClient()
     print("✅ Google Cloud TTS client initialized successfully.")
 except Exception as e:
     print(f"❌ Could not initialize Google Cloud TTS client. Make sure GOOGLE_APPLICATION_CREDENTIALS is set. Error: {e}")
     tts_client = None
 
-
-# Embedding model for document retrieval
 EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
 
 vector_db = None
-
-# --- Core Functions ---
 
 def pdf_to_text(pdf_path):
     """Extracts text from a single PDF file."""
@@ -86,8 +75,6 @@ def retrieve_context(query, db, k=5):
     context = "\n".join([doc.page_content for doc in docs])
     print(f"Retrieved context for query: '{query}'")
     return context
-
-# --- Flask Routes ---
 
 @app.route("/", methods=["GET"])
 def index():
@@ -134,10 +121,8 @@ def chat():
     """Handles chat requests using the Gemini SDK."""
     if not vector_db:
         return jsonify({"error": "Please upload one or more PDF documents first."}), 400
-    # --- MODIFICATION START ---
     if not gemini_model:
         return jsonify({"error": "Gemini client is not available. Check server logs for API key issues."}), 500
-    # --- MODIFICATION END ---
     
     user_input = request.json.get("message", "").strip()
     if not user_input:
@@ -145,9 +130,6 @@ def chat():
 
     context = retrieve_context(user_input, vector_db)
     
-    # --- MODIFICATION START ---
-    # Construct the prompt for the Gemini model.
-    # The Gemini SDK is simpler; you can combine the system instructions and the user query into a single prompt.
     prompt = (
         "You are an expert Indonesian assistant. Your primary role is to answer questions based *strictly* on the context provided by the user. "
         "Follow these rules precisely:\n"
@@ -161,7 +143,6 @@ def chat():
     )
     
     try:
-        # Generate content using the Gemini model
         response = gemini_model.generate_content(prompt)
         text_response = response.text.strip()
         
@@ -181,17 +162,15 @@ def chat():
 
                 audio_base64 = base64.b64encode(tts_response.audio_content).decode("utf-8")
             except Exception as e:
-                print(f"⚠️ TTS synthesis failed: {e}")
+                print(f"TTS synthesis failed: {e}")
                 pass
         else:
-            print("⚠️ TTS client is not initialized. Skipping audio generation.")
+            print("TTS client is not initialized. Skipping audio generation.")
         return jsonify({"response": text_response, "audio": audio_base64})
 
     except Exception as e:
         print(f"Gemini API Error: {e}")
         return jsonify({"error": f"An error occurred with the Gemini API: {e}"}), 500
 
-
-# --- Main Execution ---
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

@@ -1,4 +1,3 @@
-<!-- index.html -->
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -31,26 +30,20 @@
         const sendBtn = document.getElementById('send-btn');
         const micBtn = document.getElementById('mic-btn');
 
-        // --- MODIFICATION: addMessage now accepts optional audio data ---
         const addMessage = (sender, message, audioData = null) => {
             const messageDiv = document.createElement('div');
             messageDiv.className = 'chat-message';
-            
-            // Sanitize message to prevent HTML injection
+
             const sanitizedMessage = message.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-            
-            // Create a span for the message content
             const messageContent = document.createElement('span');
             messageContent.className = 'message-content';
             messageContent.innerHTML = `<b>${sender}:</b> ${sanitizedMessage}`;
             messageDiv.appendChild(messageContent);
 
-            // If the sender is the Bot and audio data exists, add a replay button
             if (sender === 'Bot' && audioData) {
                 const replayBtn = document.createElement('button');
                 replayBtn.className = 'replay-btn';
-                replayBtn.innerHTML = '▶️'; // Play icon
-                // Store the base64 audio data directly on the button
+                replayBtn.innerHTML = '▶️'; 
                 replayBtn.dataset.audio = audioData;
                 messageDiv.appendChild(replayBtn);
             }
@@ -98,7 +91,7 @@
             userInput.value = '';
 
             try {
-                addMessage('Bot', '...'); // Show a thinking indicator
+                addMessage('Bot', '...'); 
                 const res = await fetch('/chat', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -114,10 +107,8 @@
                 }
 
                 const botResponse = data.response;
-                // --- MODIFICATION: Pass the audio data when adding the bot's message ---
                 addMessage('Bot', botResponse, data.audio);
-                
-                // Play audio automatically the first time
+
                 if (data.audio) {
                     playAudio(data.audio);
                 }
@@ -136,10 +127,8 @@
                 sendMessage();
             }
         });
-        
-        // --- MODIFICATION: Add event listener to the chatbox for replay buttons ---
+
         chatbox.addEventListener('click', (event) => {
-            // Check if a replay button was clicked
             if (event.target && event.target.classList.contains('replay-btn')) {
                 const audioData = event.target.dataset.audio;
                 if (audioData) {
@@ -148,7 +137,6 @@
             }
         });
 
-        // --- Web Speech API Logic for Microphone (No changes here) ---
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         let recognition;
 
