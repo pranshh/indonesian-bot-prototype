@@ -2,185 +2,285 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>Indonesian RAG Chatbot</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UI Chatbot Bahasa Indonesia</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='vars.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&family=Poppins:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
 </head>
 <body>
-    <div class="container">
-        <h2>Chatbot RAG Bahasa Indonesia</h2>
-        <form id="upload-form" enctype="multipart/form-data">
-            <input type="file" name="files" accept=".pdf" required multiple>
-            <button type="submit">Unggah PDF</button>
-        </form>
-        <div id="upload-status"></div>
-        <hr>
-        <div id="chatbox"></div>
-        <div id="input-area">
-            <input type="text" id="user-input" placeholder="Tulis atau ucapkan pertanyaan..." autocomplete="off">
-            <button id="send-btn">Kirim</button>
-            <button id="mic-btn">🎤</button>
-        </div>
+    <div class="chat-container">
+        <main class="chat-main">
+            <header class="chat-header">
+                <h1>Chatbot Bahasa Indonesia</h1>
+            </header>
+
+            <div id="chat-messages" class="chat-messages"></div>
+
+            <footer class="chat-footer">
+                <div class="input-wrapper">
+                    <form id="upload-form" style="display: none;">
+                        <input type="file" id="file-input" name="files" accept=".pdf" multiple>
+                    </form>
+                    
+                    <button id="attach-btn" class="icon-button" title="Lampirkan PDF">
+                        <span class="material-symbols-outlined">attach_file</span>
+                    </button>
+                    <button id="upload-btn" class="icon-button" title="Unggah File">
+                        <span class="material-symbols-outlined">upload_file</span>
+                    </button>
+                    
+                    <input type="text" id="user-input" placeholder="Ketik pesan Anda...">
+                    
+                    <button id="mic-btn" class="icon-button" title="Mikrofon">
+                        <span class="material-symbols-outlined">mic</span>
+                    </button>
+                    <button id="send-btn" class="icon-button send-button" title="Kirim">
+                        <span class="material-symbols-outlined">send</span>
+                    </button>
+                </div>
+            </footer>
+        </main>
+        <aside class="files-sidebar">
+            <h4>File Terlampir</h4>
+            <ul id="attached-files-list" class="attached-files-list">
+                </ul>
+        </aside>
     </div>
 
-    <script>
-        const uploadForm = document.getElementById('upload-form');
-        const uploadStatus = document.getElementById('upload-status');
-        const chatbox = document.getElementById('chatbox');
-        const userInput = document.getElementById('user-input');
-        const sendBtn = document.getElementById('send-btn');
-        const micBtn = document.getElementById('mic-btn');
+<script>
+    // --- Element Selectors for the New Design ---
+    const chatMessages = document.getElementById('chat-messages');
+    const userInput = document.getElementById('user-input');
+    const sendBtn = document.getElementById('send-btn');
+    const micBtn = document.getElementById('mic-btn');
+    const attachBtn = document.getElementById('attach-btn');
+    const uploadBtn = document.getElementById('upload-btn'); // New upload button
+    const fileInput = document.getElementById('file-input');
+    const attachedFilesList = document.getElementById('attached-files-list');
 
-        const addMessage = (sender, message, audioData = null) => {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = 'chat-message';
+    // Use a DataTransfer object to manage the file list for upload
+    let filesToUpload = new DataTransfer();
 
-            const sanitizedMessage = message.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-            const messageContent = document.createElement('span');
-            messageContent.className = 'message-content';
-            messageContent.innerHTML = `<b>${sender}:</b> ${sanitizedMessage}`;
-            messageDiv.appendChild(messageContent);
+    // --- Core Functions Adapted for the New Design ---
 
-            if (sender === 'Bot' && audioData) {
-                const replayBtn = document.createElement('button');
-                replayBtn.className = 'replay-btn';
-                replayBtn.innerHTML = '▶️'; 
-                replayBtn.dataset.audio = audioData;
-                messageDiv.appendChild(replayBtn);
-            }
+    const playAudio = (base64Audio) => {
+        const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
+        audio.play().catch(e => console.error("Audio playback failed:", e));
+    };
 
-            chatbox.appendChild(messageDiv);
-            chatbox.scrollTop = chatbox.scrollHeight;
-        };
+    /**
+     * Creates message bubbles that match the new design.
+     */
+    const addMessage = (sender, message, audioData = null) => {
+        const group = document.createElement('div');
+        group.className = `message-group ${sender.toLowerCase()}`;
         
-        const playAudio = (base64Audio) => {
-            const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
-            audio.play().catch(e => {
-                console.error("Audio playback failed:", e);
-                addMessage('System', 'Gagal memutar audio balasan.');
+        const bubble = document.createElement('div');
+        bubble.className = 'message-bubble';
+
+        const p = document.createElement('p');
+        // We use innerHTML because the bot might return lists (<ul>, <li>)
+        p.innerHTML = message; 
+        bubble.appendChild(p);
+
+        if (sender.toLowerCase() === 'bot' && audioData) {
+            const replayBtn = document.createElement('button');
+            replayBtn.className = 'replay-btn icon-button'; // Use icon-button style
+            replayBtn.innerHTML = '<span class="material-symbols-outlined">replay</span>';
+            replayBtn.title = 'Putar Ulang';
+            replayBtn.dataset.audio = audioData;
+            bubble.appendChild(replayBtn);
+        }
+
+        group.appendChild(bubble);
+        // Prepend adds the new message at the top, which appears at the bottom
+        // because of the `flex-direction: column-reverse` style.
+        chatMessages.prepend(group); 
+    };
+
+    /**
+     * Adds status messages (like "Uploading...") inside the chat window.
+     */
+    const addStatusMessage = (message, isError = false) => {
+        const statusDiv = document.createElement('div');
+        statusDiv.className = 'message-group-status';
+        const span = document.createElement('span');
+        span.textContent = message;
+        span.style.color = isError ? 'var(--color-error)' : 'var(--color-text-light)';
+        statusDiv.appendChild(span);
+        chatMessages.prepend(statusDiv);
+    };
+    
+    /**
+     * Handles the actual file upload to the backend.
+     */
+    const handleFileUpload = async () => {
+        if (filesToUpload.files.length === 0) {
+             addStatusMessage("Tidak ada file yang dipilih untuk diunggah.", true);
+             return;
+        }
+        
+        const formData = new FormData();
+        for (const file of filesToUpload.files) {
+            formData.append('files', file);
+        }
+        
+        addStatusMessage("Mengunggah dan memproses PDF...");
+
+        try {
+            const res = await fetch('/upload', { method: 'POST', body: formData });
+            const data = await res.json();
+            
+            if (res.ok) {
+                addStatusMessage(data.message);
+            } else {
+                addStatusMessage(`Error: ${data.error}`, true);
+            }
+        } catch (error) {
+            addStatusMessage('Network error during upload.', true);
+        }
+    };
+
+    /**
+     * Sends the user's text message to the backend.
+     */
+    const sendMessage = async () => {
+        const message = userInput.value.trim();
+        if (!message) return;
+
+        addMessage('User', message);
+        userInput.value = '';
+
+        // Add a "thinking" indicator
+        const thinkingBubble = document.createElement('div');
+        thinkingBubble.className = 'message-group bot';
+        thinkingBubble.innerHTML = `<div class="message-bubble"><p>...</p></div>`;
+        chatMessages.prepend(thinkingBubble);
+
+        try {
+            const res = await fetch('/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({message})
             });
-        };
-
-        uploadForm.onsubmit = async (e) => {
-            e.preventDefault();
-            const formData = new FormData(uploadForm);
-            uploadStatus.textContent = "Mengunggah dan memproses PDF...";
-            uploadStatus.style.color = '#7f8c8d';
-
-            try {
-                const res = await fetch('/upload', { method: 'POST', body: formData });
-                const data = await res.json();
-                
-                if (res.ok) {
-                    uploadStatus.textContent = data.message;
-                    uploadStatus.style.color = '#27ae60';
-                } else {
-                    uploadStatus.textContent = `Error: ${data.error}`;
-                    uploadStatus.style.color = '#e74c3c';
-                }
-            } catch (error) {
-                uploadStatus.textContent = 'Network error during upload.';
-                uploadStatus.style.color = '#e74c3c';
+            
+            chatMessages.removeChild(thinkingBubble);
+            const data = await res.json();
+            
+            if (data.error) {
+                addMessage('Bot', `Error: ${data.error}`);
+                return;
             }
-        };
 
-        const sendMessage = async () => {
-            const message = userInput.value.trim();
-            if (!message) return;
-
-            addMessage('Anda', message);
-            userInput.value = '';
-
-            try {
-                addMessage('Bot', '...'); 
-                const res = await fetch('/chat', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({message})
-                });
-                
-                chatbox.removeChild(chatbox.lastChild);
-                const data = await res.json();
-                
-                if (data.error) {
-                    addMessage('Bot', `Error: ${data.error}`);
-                    return;
-                }
-
-                const botResponse = data.response;
-                addMessage('Bot', botResponse, data.audio);
-
-                if (data.audio) {
-                    playAudio(data.audio);
-                }
-
-            } catch (error) {
-                if (chatbox.lastChild && chatbox.lastChild.textContent.includes('...')) {
-                    chatbox.removeChild(chatbox.lastChild);
-                }
-                addMessage('Bot', 'Network error during chat.');
+            // Add the bot's response with a replay button
+            addMessage('Bot', data.response, data.audio);
+            // Automatically play the audio the first time
+            if (data.audio) {
+                playAudio(data.audio);
             }
-        };
+        } catch (error) {
+            chatMessages.removeChild(thinkingBubble);
+            addMessage('Bot', 'Network error during chat.');
+        }
+    };
+    
+    /**
+     * Updates the file list in the sidebar UI.
+     */
+    const updateAttachedFilesUI = () => {
+        attachedFilesList.innerHTML = '';
+        if (filesToUpload.files.length === 0) {
+             const li = document.createElement('li');
+             li.textContent = "Tidak ada file.";
+             li.style.justifyContent = 'center';
+             li.style.color = 'var(--color-text-light)';
+             li.style.border = 'none';
+             li.style.background = 'none';
+             attachedFilesList.appendChild(li);
+             return;
+        }
 
-        sendBtn.onclick = sendMessage;
-        userInput.addEventListener('keyup', (event) => {
-            if (event.key === 'Enter') {
-                sendMessage();
-            }
-        });
-
-        chatbox.addEventListener('click', (event) => {
-            if (event.target && event.target.classList.contains('replay-btn')) {
-                const audioData = event.target.dataset.audio;
-                if (audioData) {
-                    playAudio(audioData);
+        for (const file of filesToUpload.files) {
+            const li = document.createElement('li');
+            const span = document.createElement('span');
+            span.textContent = file.name;
+            
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'icon-button small';
+            deleteBtn.innerHTML = '<span class="material-symbols-outlined">close</span>';
+            deleteBtn.title = 'Hapus';
+            deleteBtn.onclick = () => {
+                const dt = new DataTransfer();
+                for(const f of filesToUpload.files) {
+                    if (f !== file) dt.items.add(f);
                 }
-            }
-        });
-
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        let recognition;
-
-        if (SpeechRecognition) {
-            recognition = new SpeechRecognition();
-            recognition.lang = 'id-ID';
-            recognition.interimResults = false;
-            recognition.maxAlternatives = 1;
-
-            micBtn.onclick = () => {
-                if (micBtn.classList.contains('recording')) {
-                    recognition.stop();
-                } else {
-                    recognition.start();
-                }
-            };
-
-            recognition.onstart = () => {
-                micBtn.classList.add('recording');
-                micBtn.textContent = '🔴';
-                userInput.placeholder = "Mendengarkan...";
-            };
-
-            recognition.onend = () => {
-                micBtn.classList.remove('recording');
-                micBtn.textContent = '🎤';
-                userInput.placeholder = "Tulis atau ucapkan pertanyaan...";
-            };
-
-            recognition.onresult = (event) => {
-                const transcript = event.results[0][0].transcript;
-                userInput.value = transcript;
-                setTimeout(sendMessage, 100); 
+                filesToUpload = dt; // Update the main file list
+                updateAttachedFilesUI(); // Re-render the UI
             };
             
-            recognition.onerror = (event) => {
-                console.error("Speech recognition error:", event.error);
-                addMessage('System', `Error pengenalan suara: ${event.error}`);
-            };
-
-        } else {
-            micBtn.style.display = 'none';
-            console.log("Speech Recognition not supported in this browser.");
+            li.appendChild(span);
+            li.appendChild(deleteBtn);
+            attachedFilesList.appendChild(li);
         }
-    </script>
+    };
+
+
+    // --- Event Listeners ---
+    sendBtn.onclick = sendMessage;
+    userInput.onkeyup = (e) => e.key === 'Enter' && sendMessage();
+    
+    // Wire up the new buttons
+    attachBtn.onclick = () => fileInput.click();
+    uploadBtn.onclick = handleFileUpload; // The new upload button triggers the upload
+    
+    fileInput.onchange = () => {
+        for (const file of fileInput.files) {
+            filesToUpload.items.add(file);
+        }
+        updateAttachedFilesUI();
+    };
+
+    chatMessages.addEventListener('click', (event) => {
+        const replayBtn = event.target.closest('.replay-btn');
+        if (replayBtn) {
+            const audioData = replayBtn.dataset.audio;
+            if (audioData) playAudio(audioData);
+        }
+    });
+
+    // --- Speech Recognition ---
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'id-ID';
+        recognition.interimResults = false;
+
+        micBtn.onclick = () => {
+            if (micBtn.classList.contains('recording')) {
+                recognition.stop();
+            } else {
+                recognition.start();
+            }
+        };
+        recognition.onstart = () => micBtn.classList.add('recording');
+        recognition.onend = () => micBtn.classList.remove('recording');
+        recognition.onresult = (event) => {
+            userInput.value = event.results[0][0].transcript;
+            sendMessage();
+        };
+        recognition.onerror = (event) => addMessage('System', `Error pengenalan suara: ${event.error}`);
+    } else {
+        micBtn.style.display = 'none';
+    }
+
+    // --- Initial State on Page Load ---
+    updateAttachedFilesUI(); // Show "Tidak ada file." message initially.
+    addMessage('Bot', 'Halo! Silakan unggah dokumen PDF untuk memulai, atau ajukan pertanyaan jika dokumen sudah diindeks.');
+</script>
+
 </body>
 </html>

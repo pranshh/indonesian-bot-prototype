@@ -1,0 +1,15 @@
+:root {
+  --color-primary: #BE5D40;
+  --color-primary-light: #FCEAE3;
+  --color-background: #FDF8F5;
+  --color-surface-light: #FFFFFF;
+  --color-surface-mid: #F5F1ED;
+  --color-surface-hover: #EFEAE6;
+  --color-border: #E0D4CA;
+  --color-text-primary: #3D2B22;
+  --color-text-secondary: #846E62;
+
+
+  --font-serif: 'Lora', serif;
+  --font-sans-serif: 'Poppins', sans-serif;
+}
