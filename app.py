@@ -10,6 +10,11 @@ from langchain.text_splitter import CharacterTextSplitter
 from langchain.docstore.document import Document
 from PyPDF2 import PdfReader
 import base64
+from dotenv import load_dotenv
+import json
+from google.oauth2 import service_account
+
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
@@ -19,31 +24,20 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 KEYS_YAML_PATH = os.path.join(BASE_DIR, "keys.yaml")
+gcp_creds_json = os.environ.get("GCP_CREDS_JSON")
+creds_dict = json.loads(gcp_creds_json)
+credentials = service_account.Credentials.from_service_account_info(creds_dict)
+
+gemini_api_key = os.getenv("GEMINI_API_KEY")
+if not gemini_api_key:
+    raise ValueError("GEMINI_API_KEY not found in .env file")
+
+genai.configure(api_key=gemini_api_key)
+gemini_model = genai.GenerativeModel("gemini-2.5-flash")  # or "gemini-pro"
+print("Gemini client initialized successfully.")
 
 try:
-    with open(KEYS_YAML_PATH, "r") as file:
-        keys = yaml.safe_load(file)
-
-    gemini_api_key = keys.get("gemini", {}).get("api_key")
-    if not gemini_api_key:
-        raise ValueError("API key for 'gemini' not found in keys.yaml")
-
-    genai.configure(api_key=gemini_api_key)
-    gemini_model = genai.GenerativeModel("gemini-2.5-flash") # Or "gemini-pro"
-    print("Gemini client initialized successfully.")
-
-except FileNotFoundError:
-    print(f"ERROR: keys.yaml file not found at {KEYS_YAML_PATH}")
-    groq_client = None
-except (ValueError, AttributeError, KeyError) as e:
-    print(f"ERROR: Could not read API key from keys.yaml. Please check its structure. Details: {e}")
-    groq_client = None
-except Exception as e:
-    print(f"Failed to initialize Gemini client: {e}")
-    groq_client = None
-
-try:
-    tts_client = texttospeech.TextToSpeechClient()
+    tts_client = texttospeech.TextToSpeechClient(credentials=credentials)
     print("✅ Google Cloud TTS client initialized successfully.")
 except Exception as e:
     print(f"❌ Could not initialize Google Cloud TTS client. Make sure GOOGLE_APPLICATION_CREDENTIALS is set. Error: {e}")
@@ -176,5 +170,5 @@ def chat():
 #     app.run(debug=True, port=5000)
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    port = 7860
     app.run(debug=True, host="0.0.0.0", port=port)

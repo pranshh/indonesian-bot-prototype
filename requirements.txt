@@ -13,3 +13,4 @@ PyPDF2
 google-generativeai
 google-cloud-texttospeech
 flask_cors
+python-dotenv
